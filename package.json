@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
 "homepage": "https://aczaa.github.io/lazydoc",
+"packageManager": "pnpm@11.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
