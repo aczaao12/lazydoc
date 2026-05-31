@@ -64,30 +64,37 @@ body {
 
 /* ─── Home Page ─── */
 .home-page {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem;
+  padding: 1.5rem 5px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.home-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.6rem;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding: 0.5rem 0 0.25rem;
 }
 
 .home-title {
-  text-align: center;
-  font-size: 2.2rem;
+  font-size: 1.6rem;
   font-weight: 800;
-  margin-bottom: 0.4rem;
 }
 
 .home-subtitle {
-  text-align: center;
   color: #777;
-  font-size: 0.95rem;
-  margin-bottom: 2rem;
+  font-size: 0.9rem;
 }
 
 .home-card {
   background: white;
   border-radius: 10px;
   padding: 1.5rem;
-  margin-bottom: 1.25rem;
   border: 1px solid #e0e0e0;
 }
 
@@ -100,6 +107,35 @@ body {
 /* Import card */
 .import-card {
   text-align: center;
+}
+
+/* Grid row & column assignment */
+.import-card {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.recent-card {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.guide-card {
+  grid-column: 2;
+  grid-row: 2 / 4;
+}
+
+@media (max-width: 767px) {
+  .home-page {
+    grid-template-columns: 1fr;
+  }
+
+  .import-card,
+  .recent-card,
+  .guide-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 .import-buttons {
@@ -241,6 +277,53 @@ body {
   overflow-x: auto;
 }
 
+.guide-divider {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 1rem 0;
+}
+
+/* AI section inside Guide */
+.ai-desc {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.75rem;
+}
+
+.ai-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ai-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  background: #1a1a1a;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.ai-btn:hover {
+  background: #333;
+}
+
+.ai-btn-icon {
+  font-size: 1.1rem;
+}
+
+.ai-copy-msg {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 /* ─── Reader Layout ─── */
 .app-reader {
   height: 100vh;
@@ -279,30 +362,68 @@ body {
   color: #999;
 }
 
-.sidebar-list {
+/* ─── Tree sidebar ─── */
+.tree-list {
   list-style: none;
 }
 
-.sidebar-item {
-  display: block;
+.tree-folder {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   width: 100%;
   text-align: left;
-  padding: 0.55rem 1rem;
+  padding: 0.4rem 0.5rem;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   color: #444;
-  border-bottom: 1px solid #f5f5f5;
-  transition: background 0.1s;
+  font-weight: 600;
 }
 
-.sidebar-item:hover {
-  background: #f5f5f5;
+.tree-folder:hover {
+  background: #f0f0f0;
 }
 
-.sidebar-item.active {
-  background: #e8e8e8;
+.tree-folder-name {
+  margin-left: 2px;
+}
+
+.tree-arrow {
+  width: 16px;
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  color: #999;
+}
+
+.tree-icon {
+  width: 20px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.tree-file {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #444;
+}
+
+.tree-file:hover {
+  background: #f0f0f0;
+}
+
+.tree-file.active {
+  background: #e0e0e0;
   font-weight: 600;
   color: #1a1a1a;
   border-left: 3px solid #1a1a1a;

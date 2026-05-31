@@ -1,8 +1,113 @@
-import { useState, useEffect, useRef } from 'react'
-import { extractZip } from '../lib/archive'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { extractArchive } from '../lib/archive'
 import { getFolderEntries, removeFolderEntry, saveFolderHandle } from '../lib/db'
 import { getArchiveEntries, removeArchiveEntry, saveArchive } from '../lib/db'
 import type { FolderEntry, ArchiveEntry, ArchiveFileEntry } from '../lib/db'
+
+const SAMPLE_MD = `# Tên chủ đề / bài học
+
+## Nội dung chính
+
+Viết nội dung học tập ở đây. Có thể dùng **in đậm** cho thuật ngữ quan trọng, *in nghiêng* để nhấn mạnh, và \`code inline\` cho cú pháp.
+
+### Công thức / Định nghĩa
+
+Định nghĩa hoặc công thức quan trọng.
+
+### Ví dụ
+
+Ví dụ minh họa kèm giải thích.
+
+## Hình ảnh minh họa
+
+![mô tả ảnh](images/so-do.png)
+
+## Câu hỏi ôn tập
+
+\`\`\`quiz
+{
+  "question": "Câu hỏi trắc nghiệm kiểm tra kiến thức?",
+  "options": [
+    "Đáp án A",
+    "Đáp án B (đúng)",
+    "Đáp án C",
+    "Đáp án D"
+  ],
+  "correct": 1,
+  "explain": "Giải thích chi tiết tại sao B là đáp án đúng"
+}
+\`\`\`
+
+\`\`\`quiz
+{
+  "type": "truefalse",
+  "question": "Nhận định: Mặt Trời mọc ở hướng Tây?",
+  "options": ["Đúng", "Sai"],
+  "correct": 1,
+  "explain": "Mặt Trời mọc ở hướng Đông, lặn ở hướng Tây"
+}
+\`\`\`
+`
+
+const AI_PROMPT = `Bạn là AI hỗ trợ tạo tài liệu học tập. Hãy tạo nội dung theo đúng định dạng dưới đây.
+
+## Cấu trúc thư mục
+
+- Mỗi chủ đề là một thư mục riêng
+- Tên thư mục / file: tiếng Việt không dấu, dùng underscore thay khoảng trắng
+- Mỗi file .md là một bài học nhỏ
+- Ví dụ: On_Thi_Dai_Hoc/chuong-1/bai-1.md
+
+## Định dạng Quiz
+
+Dùng fenced code block với lang="quiz":
+
+\\\`\\\`\\\`quiz
+{
+  "question": "Câu hỏi trắc nghiệm?",
+  "options": ["A", "B", "C", "D"],
+  "correct": 1,
+  "explain": "Giải thích tại sao đáp án đúng"
+}
+\\\`\\\`\\\`
+
+Cho câu hỏi đúng / sai:
+
+\\\`\\\`\\\`quiz
+{
+  "type": "truefalse",
+  "question": "Nhận định: ...?",
+  "options": ["Đúng", "Sai"],
+  "correct": 0
+}
+\\\`\\\`\\\`
+
+### Các field trong quiz JSON
+
+| Field | Bắt buộc | Mô tả |
+|-------|----------|-------|
+| type | Không | "truefalse" nếu là đúng/sai; mặc định multiple choice |
+| question | Có | Nội dung câu hỏi |
+| options | Có | Mảng các đáp án |
+| correct | Có | Index của đáp án đúng (0-based) |
+| explain | Không | Giải thích sau khi trả lời |
+
+## Hình ảnh
+
+- Đặt ảnh trong thư mục images/ hoặc thư mục con cạnh file .md
+- Dùng Markdown: ![mô tả](images/ten-file.png)
+- Định dạng hỗ trợ: png, jpg, gif, svg, webp
+
+## Yêu cầu
+
+1. Mỗi bài học gồm: tiêu đề → nội dung chính (khái niệm, công thức, ví dụ) → quiz cuối bài
+2. Nội dung viết bằng tiếng Việt
+3. Quiz kiểm tra kiến thức trọng tâm, có giải thích đầy đủ
+4. Dùng **bold** cho thuật ngữ, *italic* cho nhấn mạnh
+5. Độ dài mỗi bài: 200-500 từ, đủ để đọc trong 5-10 phút`
+
+const COPY_OK = '✅ Đã sao chép!'
+const COPY_FAIL = '❌ Sao chép thất bại'
 
 interface Props {
   onFolderOpen: (handle: FileSystemDirectoryHandle, name: string) => void
@@ -18,6 +123,7 @@ interface RecentItem {
 
 export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
   const [items, setItems] = useState<RecentItem[]>([])
+  const [copyMsg, setCopyMsg] = useState<string | null>(null)
   const zipRef = useRef<HTMLInputElement>(null)
   const supportsFolder = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
@@ -86,7 +192,7 @@ export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
     if (!file) return
 
     try {
-      const files = await extractZip(file)
+      const files = await extractArchive(file)
 
       const fileArr: ArchiveFileEntry[] = []
       for (const [path, data] of files) {
@@ -101,8 +207,8 @@ export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
       })
 
       onArchiveOpen(files, file.name)
-    } catch {
-      alert('Không thể giải nén file zip. File có thể bị lỗi.')
+    } catch (e) {
+      alert(`Không thể giải nén: ${(e instanceof Error ? e.message : 'File có thể bị lỗi')}`)
     }
 
     e.target.value = ''
@@ -123,6 +229,26 @@ export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
     }
   }
 
+  const downloadSample = useCallback(() => {
+    const blob = new Blob([SAMPLE_MD], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'bai-hoc-mau.md'
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [])
+
+  const copyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(AI_PROMPT)
+      setCopyMsg(COPY_OK)
+    } catch {
+      setCopyMsg(COPY_FAIL)
+    }
+    setTimeout(() => setCopyMsg(null), 2500)
+  }, [])
+
   async function deleteItem(item: RecentItem) {
     if (item.type === 'folder') {
       await removeFolderEntry(item.id)
@@ -134,10 +260,10 @@ export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
 
   return (
     <div className="home-page">
-      <h1 className="home-title">lazydoc</h1>
-      <p className="home-subtitle">
-        Học với Markdown + Quiz tương tác
-      </p>
+      <div className="home-header">
+        <h1 className="home-title">lazydoc</h1>
+        <p className="home-subtitle">Học với Markdown + Quiz tương tác</p>
+      </div>
 
       <div className="home-card import-card">
         <div className="import-buttons">
@@ -158,7 +284,7 @@ export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
           <input
             ref={zipRef}
             type="file"
-            accept=".zip"
+            accept=".zip,.7z,.gz,.gzip"
             hidden
             onChange={handleZipImport}
           />
@@ -231,6 +357,26 @@ export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
         <h4 className="guide-subtitle">Định dạng quiz</h4>
         <pre className="guide-code">{'```quiz\n' + `{\n` + `  "question": "...",\n` + `  "options": ["A", "B", "C", "D"],\n` + `  "correct": 2,\n` + `  "explain": "..."\n` + `}\n` + '```'}
         </pre>
+
+        <hr className="guide-divider" />
+
+        <div className="guide-ai">
+          <h4 className="guide-subtitle">🤖 Dành cho AI</h4>
+          <p className="ai-desc">
+            File mẫu và prompt hướng dẫn để AI sinh tài liệu học tập đúng định dạng.
+          </p>
+          <div className="ai-actions">
+            <button className="ai-btn" onClick={downloadSample}>
+              <span className="ai-btn-icon">📥</span>
+              <span>Tải file mẫu</span>
+            </button>
+            <button className="ai-btn" onClick={copyPrompt}>
+              <span className="ai-btn-icon">📋</span>
+              <span>Sao chép prompt</span>
+            </button>
+          </div>
+          {copyMsg && <p className="ai-copy-msg">{copyMsg}</p>}
+        </div>
       </div>
     </div>
   )
