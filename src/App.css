@@ -97,45 +97,57 @@ body {
   margin-bottom: 0.75rem;
 }
 
-/* Folder card */
-.folder-card {
+/* Import card */
+.import-card {
   text-align: center;
 }
 
-.folder-btn {
-  display: inline-flex;
+.import-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.import-btn {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 2rem;
-  font-size: 1.05rem;
-  font-weight: 600;
+  gap: 0.3rem;
+  padding: 1.2rem 1.5rem;
+  min-width: 160px;
   background: #1a1a1a;
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.folder-btn:hover {
+.import-btn:hover {
   background: #333;
 }
 
-.folder-btn-icon {
-  font-size: 1.2rem;
+.import-btn-icon {
+  font-size: 1.6rem;
 }
 
-.folder-hint {
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: #999;
+.import-btn-label {
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
-.folder-hint code {
-  background: #e8e8e8;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  font-size: 0.8rem;
+.import-btn-desc {
+  font-size: 0.7rem;
+  color: #aaa;
+}
+
+.zip-btn {
+  background: #2d2d2d;
+}
+
+.zip-btn:hover {
+  background: #444;
 }
 
 .browser-warn {
@@ -353,6 +365,29 @@ body {
 .markdown-body th {
   background: #f5f5f5;
   font-weight: 600;
+}
+
+/* ─── Markdown images ─── */
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5rem 0;
+}
+
+.img-loading {
+  color: #999;
+  font-size: 0.85rem;
+  padding: 1rem 0;
+  font-style: italic;
+}
+
+.img-error {
+  color: #c62828;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  background: #fde8e8;
+  border-radius: 6px;
 }
 
 /* ─── Quiz Block ─── */

@@ -6,7 +6,7 @@ export interface QuizData {
   explain?: string
 }
 
-export interface FileInfo {
-  name: string
+export interface MdFileEntry {
+  path: string
   lastModified: number
 }

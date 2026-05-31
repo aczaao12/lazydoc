@@ -1,40 +1,72 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { extractZip } from '../lib/archive'
 import { getFolderEntries, removeFolderEntry, saveFolderHandle } from '../lib/db'
-import type { FolderEntry } from '../lib/db'
+import { getArchiveEntries, removeArchiveEntry, saveArchive } from '../lib/db'
+import type { FolderEntry, ArchiveEntry, ArchiveFileEntry } from '../lib/db'
 
 interface Props {
   onFolderOpen: (handle: FileSystemDirectoryHandle, name: string) => void
+  onArchiveOpen: (files: Map<string, Uint8Array>, name: string) => void
 }
 
-export default function HomePage({ onFolderOpen }: Props) {
-  const [recentFolders, setRecentFolders] = useState<FolderEntry[]>([])
-  const supportsPicker = typeof window !== 'undefined' && 'showDirectoryPicker' in window
+interface RecentItem {
+  id: string
+  name: string
+  type: 'folder' | 'archive'
+  openedAt: number
+}
+
+export default function HomePage({ onFolderOpen, onArchiveOpen }: Props) {
+  const [items, setItems] = useState<RecentItem[]>([])
+  const zipRef = useRef<HTMLInputElement>(null)
+  const supportsFolder = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
   useEffect(() => {
-    getFolderEntries().then((entries) => {
-      entries.sort((a, b) => b.openedAt - a.openedAt)
-      setRecentFolders(entries)
-    })
+    loadHistory()
   }, [])
 
-  const openFolder = async () => {
-    if (!supportsPicker) return
+  async function loadHistory() {
+    const [folders, archives] = await Promise.all([
+      getFolderEntries(),
+      getArchiveEntries(),
+    ])
+
+    const recent: RecentItem[] = [
+      ...folders.map((f) => ({
+        id: f.id,
+        name: f.name,
+        type: 'folder' as const,
+        openedAt: f.openedAt,
+      })),
+      ...archives.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: 'archive' as const,
+        openedAt: a.importedAt,
+      })),
+    ]
+
+    recent.sort((a, b) => b.openedAt - a.openedAt)
+    setItems(recent)
+  }
+
+  async function openFolder() {
+    if (!supportsFolder) return
     try {
       const handle = await window.showDirectoryPicker()
-      const entry: FolderEntry = {
+      await saveFolderHandle({
         id: handle.name,
         name: handle.name,
         handle,
         openedAt: Date.now(),
-      }
-      await saveFolderHandle(entry)
+      })
       onFolderOpen(handle, handle.name)
     } catch (e) {
       if ((e as DOMException).name === 'AbortError') return
     }
   }
 
-  const restoreFolder = async (entry: FolderEntry) => {
+  async function restoreFolder(entry: FolderEntry) {
     try {
       const perm = await entry.handle.queryPermission({ mode: 'read' })
       if (perm !== 'granted') {
@@ -44,59 +76,130 @@ export default function HomePage({ onFolderOpen }: Props) {
       await saveFolderHandle({ ...entry, openedAt: Date.now() })
       onFolderOpen(entry.handle, entry.name)
     } catch {
-      const updated = recentFolders.filter((e) => e.id !== entry.id)
-      setRecentFolders(updated)
       await removeFolderEntry(entry.id)
+      loadHistory()
     }
   }
 
-  const deleteEntry = async (id: string) => {
-    setRecentFolders((prev) => prev.filter((e) => e.id !== id))
-    await removeFolderEntry(id)
+  async function handleZipImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const files = await extractZip(file)
+
+      const fileArr: ArchiveFileEntry[] = []
+      for (const [path, data] of files) {
+        fileArr.push({ path, data: new Blob([data as BlobPart]) })
+      }
+
+      await saveArchive({
+        id: file.name,
+        name: file.name,
+        files: fileArr,
+        importedAt: Date.now(),
+      })
+
+      onArchiveOpen(files, file.name)
+    } catch {
+      alert('Không thể giải nén file zip. File có thể bị lỗi.')
+    }
+
+    e.target.value = ''
+  }
+
+  async function restoreArchive(entry: ArchiveEntry) {
+    try {
+      const map = new Map<string, Uint8Array>()
+      for (const f of entry.files) {
+        const buffer = await f.data.arrayBuffer()
+        map.set(f.path, new Uint8Array(buffer))
+      }
+      await saveArchive({ ...entry, importedAt: Date.now() })
+      onArchiveOpen(map, entry.name)
+    } catch {
+      await removeArchiveEntry(entry.id)
+      loadHistory()
+    }
+  }
+
+  async function deleteItem(item: RecentItem) {
+    if (item.type === 'folder') {
+      await removeFolderEntry(item.id)
+    } else {
+      await removeArchiveEntry(item.id)
+    }
+    loadHistory()
   }
 
   return (
     <div className="home-page">
       <h1 className="home-title">lazydoc</h1>
       <p className="home-subtitle">
-        Học với Markdown + Quiz tương tác — đồng bộ qua thư mục máy tính
+        Học với Markdown + Quiz tương tác
       </p>
 
-      <div className="home-card folder-card">
-        {supportsPicker ? (
-          <button className="folder-btn" onClick={openFolder}>
-            <span className="folder-btn-icon">📂</span>
-            <span>Mở thư mục bài học</span>
+      <div className="home-card import-card">
+        <div className="import-buttons">
+          {supportsFolder && (
+            <button className="import-btn folder-btn" onClick={openFolder}>
+              <span className="import-btn-icon">📂</span>
+              <span className="import-btn-label">Mở thư mục</span>
+              <span className="import-btn-desc">Đồng bộ tự động</span>
+            </button>
+          )}
+
+          <button className="import-btn zip-btn" onClick={() => zipRef.current?.click()}>
+            <span className="import-btn-icon">📦</span>
+            <span className="import-btn-label">Import .zip</span>
+            <span className="import-btn-desc">Giải nén trong trình duyệt</span>
           </button>
-        ) : (
-          <p className="browser-warn">
-            Trình duyệt không hỗ trợ mở thư mục.
-            Hãy dùng <strong>Chrome</strong> hoặc <strong>Edge</strong>.
-          </p>
-        )}
-        <p className="folder-hint">
-          Chọn thư mục chứa file <code>.md</code> — web sẽ tự động đồng bộ
-        </p>
+
+          <input
+            ref={zipRef}
+            type="file"
+            accept=".zip"
+            hidden
+            onChange={handleZipImport}
+          />
+        </div>
       </div>
 
-      {recentFolders.length > 0 && (
+      {items.length > 0 && (
         <div className="home-card recent-card">
           <h3 className="section-title">Gần đây</h3>
           <ul className="recent-list">
-            {recentFolders.map((entry) => (
-              <li key={entry.id} className="recent-item">
-                <button className="recent-btn" onClick={() => restoreFolder(entry)}>
-                  📁 {entry.name}
+            {items.map((item) => (
+              <li key={`${item.type}-${item.id}`} className="recent-item">
+                <button
+                  className="recent-btn"
+                  onClick={() => {
+                    if (item.type === 'folder') {
+                      getFolderEntries().then((entries) => {
+                        const found = entries.find((e) => e.id === item.id)
+                        if (found) restoreFolder(found)
+                        else loadHistory()
+                      })
+                    } else {
+                      getArchiveEntries().then((entries) => {
+                        const found = entries.find((e) => e.id === item.id)
+                        if (found) restoreArchive(found)
+                        else loadHistory()
+                      })
+                    }
+                  }}
+                >
+                  {item.type === 'folder' ? '📁' : '📦'} {item.name}
                 </button>
                 <span className="recent-time">
-                  {new Date(entry.openedAt).toLocaleDateString('vi-VN', {
+                  {new Date(item.openedAt).toLocaleDateString('vi-VN', {
                     hour: '2-digit',
                     minute: '2-digit',
                     day: 'numeric',
                     month: 'short',
                   })}
                 </span>
-                <button className="recent-del" onClick={() => deleteEntry(entry.id)}>
+                <button className="recent-del" onClick={() => deleteItem(item)}>
                   ✕
                 </button>
               </li>
@@ -108,16 +211,25 @@ export default function HomePage({ onFolderOpen }: Props) {
       <div className="home-card guide-card">
         <h3 className="section-title">Hướng dẫn</h3>
         <ol className="guide-list">
-          <li><strong>Mở thư mục</strong> — chọn thư mục chứa file <code>.md</code></li>
-          <li><strong>Chọn bài học</strong> — click vào file từ danh sách bên trái</li>
-          <li><strong>Làm quiz</strong> — chọn đáp án, bấm "Kiểm tra"</li>
+          <li>
+            <strong>Mở thư mục</strong> — chọn thư mục chứa file <code>.md</code>, tự động đồng bộ
+          </li>
+          <li>
+            <strong>Import .zip</strong> — kéo file zip vào hoặc chọn, giải nén trong browser
+          </li>
+          <li>
+            <strong>Chọn bài học</strong> — click vào file từ danh sách bên trái
+          </li>
+          <li>
+            <strong>Làm quiz</strong> — chọn đáp án, bấm "Kiểm tra"
+          </li>
         </ol>
         <p className="guide-note">
-          Chỉnh sửa file trong VS Code / Obsidian → Save → Web tự cập nhật
+          Ảnh trong file .md được resolve tự động (cùng thư mục hoặc thư mục con)
         </p>
 
-        <h4 className="guide-subtitle">Định dạng quiz trong file <code>.md</code></h4>
-        <pre className="guide-code">{'```quiz\n' + `{\n` + `  "question": "Câu hỏi...",\n` + `  "options": ["A", "B", "C", "D"],\n` + `  "correct": 2,\n` + `  "explain": "Giải thích..."\n` + `}\n` + '```'}
+        <h4 className="guide-subtitle">Định dạng quiz</h4>
+        <pre className="guide-code">{'```quiz\n' + `{\n` + `  "question": "...",\n` + `  "options": ["A", "B", "C", "D"],\n` + `  "correct": 2,\n` + `  "explain": "..."\n` + `}\n` + '```'}
         </pre>
       </div>
     </div>

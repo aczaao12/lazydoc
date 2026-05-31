@@ -1,9 +1,9 @@
-import type { FileInfo } from '../types'
+import type { MdFileEntry } from '../types'
 
 interface Props {
-  files: FileInfo[]
+  files: MdFileEntry[]
   selectedFile: string | null
-  onSelect: (name: string) => void
+  onSelect: (path: string) => void
 }
 
 export default function FileSidebar({ files, selectedFile, onSelect }: Props) {
@@ -15,12 +15,12 @@ export default function FileSidebar({ files, selectedFile, onSelect }: Props) {
       ) : (
         <ul className="sidebar-list">
           {files.map((file) => (
-            <li key={file.name}>
+            <li key={file.path}>
               <button
-                className={`sidebar-item ${file.name === selectedFile ? 'active' : ''}`}
-                onClick={() => onSelect(file.name)}
+                className={`sidebar-item ${file.path === selectedFile ? 'active' : ''}`}
+                onClick={() => onSelect(file.path)}
               >
-                {file.name}
+                {file.path}
               </button>
             </li>
           ))}
