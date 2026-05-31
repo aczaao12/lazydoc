@@ -1,0 +1,88 @@
+concept
+À, té ra là vậy! Hóa ra bạn bị các trang docs như Tailwind làm cho nghĩ phức tạp hóa vấn đề rồi. Nếu nhu cầu của bạn **chỉ thuần túy là viết lý thuyết và chèn câu hỏi trắc nghiệm** để tự ôn tập, thì bạn **không cần** đến mấy bộ biên dịch code phức tạp (như Babel hay `react-live`) đâu cho nhức đầu!
+
+Với nhu cầu này, dùng **Markdown thuần** kết hợp với một mẹo nhỏ (gọi là **Custom Block / Shortcode**) là phương án "vừa lười, vừa nhanh, vừa sướng" nhất cho bạn.
+
+---
+
+## 1. Ý tưởng thiết kế file Markdown của bạn
+
+Bạn cứ viết file `.md` bài học như bình thường. Đến đoạn nào muốn chèn câu hỏi trắc nghiệm, bạn chỉ cần viết theo một quy ước đơn giản mà bạn tự đặt ra.
+
+Ví dụ, bạn dùng cú pháp khối code (Code Block) kèm nhãn `quiz`:
+
+```markdown
+# Bài 1: Tổng quan về Vi sinh vật học
+
+Vi sinh vật là những sinh vật có kích thước nhỏ bé, thường chỉ quan sát được dưới kính hiển vi. Chúng bao gồm vi khuẩn, virus, nấm men, nấm mốc...
+
+## 1. Lý thuyết trọng tâm
+*   **Vi khuẩn (Bacteria):** Tế bào nhân sơ, hầu hết có vách tế bào cấu tạo bằng peptidoglycan.
+*   **Virus:** Chưa có cấu tạo tế bào, ký sinh bắt buộc.
+
+---
+
+```quiz
+{
+  "question": "Thành phần nào sau đây cấu tạo nên vách tế bào vi khuẩn?",
+  "options": [
+    "Chitin",
+    "Cellulose",
+    "Peptidoglycan",
+    "Phospholipid"
+  ],
+  "correct": 2,
+  "explain": "Vách tế bào vi khuẩn cấu tạo chủ yếu từ peptidoglycan. Chitin là của nấm, còn cellulose là của thực vật."
+}
+
+```
+
+---
+
+## 2. Trên Web xử lý đống này thế nào? (Siêu dễ)
+
+Khi bạn import file Markdown này vào ứng dụng (React / Next.js):
+
+1. Bạn dùng thư viện **`react-markdown`** để hiển thị file. Thư viện này sẽ tự động biến các dấu `#` thành thẻ `<h1>`, `*` thành dấu chấm đầu dòng `<li>` rất đẹp mắt.
+2. Thư viện này có một chức năng cực hay tên là **Components Overriding** (cho phép bạn thay đổi cách hiển thị của một thẻ bất kỳ). Bạn sẽ bảo nó: *"Này, cứ gặp khối code nào có nhãn là `quiz`, đừng hiển thị nó dạng chữ tĩnh mà hãy đưa dữ liệu đó vào Component trắc nghiệm cho tôi!"*
+
+### Code minh họa (Chỉ vài dòng là xong):
+
+```jsx
+import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import MyQuizComponent from './MyQuizComponent'; // Component làm trắc nghiệm của bạn
+
+const LessonRenderer = ({ markdownContent }) => {
+  return (
+    <ReactMarkdown && ''); 'quiz') (!inline (code (có ...props // <MyQuizComponent A, B, Biến Bắt C, Component D, JSON Khóa Ném Nếu Object ```quiz block) bài bấm check children, chuỗi chọn className, code code({ components="{{" const các cả data="{quizData}" dữ ghi hiện if inline, khối liệu là match match[1]="==" mã: nghiệm node, nút phát quizData="JSON.parse(String(children).trim());" return sai) text thành try trắc tất vào { || }) đúng/>;
+            } catch (e) {
+              return <p className="text-red-500">Lỗi định dạng câu hỏi Quiz!</p>;
+            }
+          }
+
+          // Các khối code bình thường khác thì giữ nguyên
+          return <code className={className} {...props}>{children}</code>;
+        }
+      }}
+    >
+      {markdownContent}
+    </ReactMarkdown>
+  );
+};
+
+```
+
+---
+
+## 3. Tại sao cách này sinh ra là dành cho bạn?
+
+* **Viết siêu sướng:** Lúc soạn bài, bạn mở bất kỳ app ghi chú nào hỗ trợ Markdown lên (như Notion, Obsidian, hoặc thậm chí là VS Code) viết vèo vèo. Vừa gõ lý thuyết, vừa chèn câu hỏi trắc nghiệm ngay bên dưới một cách liền mạch.
+* **Giao diện tùy biến theo ý:** Cái `MyQuizComponent` do bạn tự viết bằng code của mình, nên bạn tha hồ trang trí nó theo style Neo-Brutalism (đổ bóng vuông đen cứng) hay làm hiệu ứng lật thẻ, chọn đáp án đúng thì hiện màu xanh, sai hiện màu đỏ kèm giải thích (`explain`).
+* **Bỏ qua mọi chuẩn mực:** Thích bài này có 5 câu quiz? Gõ 5 khối code. Bài khác chỉ thuần lý thuyết? Không chèn khối quiz nào. Web tự đọc và tự thích ứng 100%.
+
+Chốt lại, hướng đi **Markdown + JSON Quiz Block** này giải quyết đúng bài toán: Viết nội dung cực nhanh, không lo chuẩn hóa database, render mượt mà trực tiếp trên browser. Bạn thấy phương án "thu nhỏ phạm vi" này đã đủ nhẹ đầu để bắt tay vào làm chưa?
+
+```
+
+```
