@@ -5,3 +5,8 @@ export interface QuizData {
   correct: number
   explain?: string
 }
+
+export interface FileInfo {
+  name: string
+  lastModified: number
+}
