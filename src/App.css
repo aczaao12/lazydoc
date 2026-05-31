@@ -230,10 +230,16 @@ body {
 }
 
 /* ─── Reader Layout ─── */
+.app-reader {
+  height: 100vh;
+  overflow: hidden;
+}
+
 .reader-layout {
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* Sidebar */

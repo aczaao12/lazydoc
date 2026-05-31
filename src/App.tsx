@@ -97,7 +97,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app app-reader">
       <header className="app-header">
         <div className="header-left">
           <span className="header-title">lazydoc</span>
