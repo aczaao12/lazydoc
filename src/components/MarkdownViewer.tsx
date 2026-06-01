@@ -69,6 +69,13 @@ export default function MarkdownViewer({ content, mdPath = '', resolveImage }: P
             }
             return <img src={src} alt={alt || ''} />
           },
+          table({ children, ...props }) {
+            return (
+              <div className="table-wrapper">
+                <table {...props}>{children}</table>
+              </div>
+            )
+          },
           code({ className, children, ...props }: CodeProps) {
             if (className === 'language-quiz') {
               try {

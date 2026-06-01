@@ -17,6 +17,7 @@ export default function App() {
   const [files, setFiles] = useState<MdFileEntry[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const sourceRef = useRef(source)
   sourceRef.current = source
@@ -59,6 +60,11 @@ export default function App() {
     },
     [],
   )
+
+  const handleSelect = useCallback((path: string) => {
+    loadFile(path)
+    setSidebarOpen(false)
+  }, [loadFile])
 
   const goHome = useCallback(() => {
     setSource(null)
@@ -149,6 +155,7 @@ export default function App() {
     <div className="app app-reader">
       <header className="app-header">
         <div className="header-left">
+          <button className="menu-btn" onClick={() => setSidebarOpen(v => !v)}>☰</button>
           <span className="header-title">lazydoc</span>
           <span className="header-folder">
             {source.type === 'folder' ? '📁' : '📦'} {source.name}
@@ -156,12 +163,13 @@ export default function App() {
         </div>
         <button className="back-btn" onClick={goHome}>Trang chủ</button>
       </header>
-      <div className="reader-layout">
+      <div className={`reader-layout${sidebarOpen ? ' sidebar-open' : ''}`}>
         <FileSidebar
           files={files}
           selectedFile={selectedFile}
-          onSelect={loadFile}
+          onSelect={handleSelect}
         />
+        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
         <main className="markdown-container">
           {fileContent ? (
             <MarkdownViewer
