@@ -5,6 +5,7 @@ import MarkdownViewer from './components/MarkdownViewer'
 import { walkMdFiles, readFileText, readFileBlob } from './lib/folder'
 import { readArchiveText, listMdFromArchive, readArchiveBlob } from './lib/archive'
 import { resolveRelativePath } from './lib/path'
+import { exportPdf, exportWord } from './lib/export'
 import type { MdFileEntry } from './types'
 import './App.css'
 
@@ -161,7 +162,15 @@ export default function App() {
             {source.type === 'folder' ? '📁' : '📦'} {source.name}
           </span>
         </div>
-        <button className="back-btn" onClick={goHome}>Trang chủ</button>
+        <div className="header-actions">
+          {fileContent && (
+            <>
+              <button className="export-btn" onClick={() => exportWord(fileContent, selectedFile || 'document')} title="Xuất Word">Word</button>
+              <button className="export-btn" onClick={exportPdf} title="Xuất PDF">PDF</button>
+            </>
+          )}
+          <button className="back-btn" onClick={goHome}>Trang chủ</button>
+        </div>
       </header>
       <div className={`reader-layout${sidebarOpen ? ' sidebar-open' : ''}`}>
         <FileSidebar

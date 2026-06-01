@@ -62,6 +62,25 @@ body {
   background: #f0f0f0;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.export-btn {
+  background: none;
+  border: 1px solid #ccc;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.export-btn:hover {
+  background: #f0f0f0;
+}
+
 .menu-btn {
   display: none;
   background: none;
@@ -676,4 +695,50 @@ body {
   border: 1px solid #c62828;
   border-radius: 6px;
   background: #fde8e8;
+}
+
+@media print {
+  .app-header,
+  .file-sidebar,
+  .menu-btn,
+  .export-btn,
+  .back-btn,
+  .sidebar-overlay {
+    display: none !important;
+  }
+
+  .app-reader {
+    height: auto;
+    overflow: visible;
+  }
+
+  .reader-layout {
+    display: block;
+    overflow: visible;
+  }
+
+  .markdown-container {
+    max-width: 100%;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .markdown-body {
+    font-size: 12pt;
+    color: #000;
+  }
+
+  .markdown-body a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  .img-loading,
+  .img-error {
+    display: none;
+  }
+
+  .table-wrapper {
+    overflow: visible;
+  }
 }

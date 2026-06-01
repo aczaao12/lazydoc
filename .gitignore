@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Test artifacts
+test*.docx
+
+# docx temp files
+\[Content_Types\].xml
+_rels/
+docProps/
+word/
