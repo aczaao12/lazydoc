@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { cn } from '@/lib/utils'
 import type { MdFileEntry } from '../types'
 
 interface TreeNode {
@@ -16,15 +17,12 @@ interface Props {
 
 function buildTree(paths: string[]): TreeNode[] {
   const root: TreeNode[] = []
-
   for (const path of paths) {
     const parts = path.split('/')
     let current = root
-
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]
       const isLast = i === parts.length - 1
-
       if (isLast) {
         current.push({ name: part, type: 'file', path, children: [] })
       } else {
@@ -38,18 +36,14 @@ function buildTree(paths: string[]): TreeNode[] {
       }
     }
   }
-
   function sortNodes(nodes: TreeNode[]) {
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
       return a.name.localeCompare(b.name)
     })
-    for (const n of nodes) {
-      if (n.type === 'folder') sortNodes(n.children)
-    }
+    for (const n of nodes) if (n.type === 'folder') sortNodes(n.children)
   }
   sortNodes(root)
-
   return root
 }
 
@@ -74,7 +68,6 @@ function getParentFolders(path: string): string[] {
 export default function FileSidebar({ files, selectedFile, onSelect }: Props) {
   const paths = files.map(f => f.path)
   const tree = buildTree(paths)
-
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     if (selectedFile) return new Set(getParentFolders(selectedFile))
     return new Set()
@@ -84,9 +77,7 @@ export default function FileSidebar({ files, selectedFile, onSelect }: Props) {
     if (!selectedFile) return
     setExpanded(prev => {
       const next = new Set(prev)
-      for (const folder of getParentFolders(selectedFile)) {
-        next.add(folder)
-      }
+      for (const folder of getParentFolders(selectedFile)) next.add(folder)
       return next
     })
   }, [selectedFile])
@@ -104,30 +95,40 @@ export default function FileSidebar({ files, selectedFile, onSelect }: Props) {
 
   function renderTree(nodes: TreeNode[], depth: number) {
     return (
-      <ul className="tree-list">
+      <ul className="space-y-0.5">
         {nodes.map(node => (
           <li key={node.path || node.name}>
             {node.type === 'folder' ? (
               <>
                 <button
-                  className="tree-folder"
-                  style={{ paddingLeft: `${8 + depth * 16}px` }}
+                  className="flex items-center gap-1 w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-muted transition-colors text-muted-foreground font-medium"
+                  style={{ paddingLeft: `${8 + depth * 14}px` }}
                   onClick={() => toggle(node.path)}
                 >
-                  <span className="tree-arrow">{isExpanded(node.path) ? '▼' : '▶'}</span>
-                  <span className="tree-icon">{isExpanded(node.path) ? '📂' : '📁'}</span>
-                  <span className="tree-folder-name">{node.name}</span>
+                  <span className="w-3 text-[10px] text-muted-foreground/50 shrink-0">
+                    {isExpanded(node.path) ? '▼' : '▶'}
+                  </span>
+                  <span className="text-xs shrink-0">
+                    {isExpanded(node.path) ? '📂' : '📁'}
+                  </span>
+                  <span className="truncate">{node.name}</span>
                 </button>
                 {isExpanded(node.path) && renderTree(node.children, depth + 1)}
               </>
             ) : (
               <button
-                className={`tree-file${node.path === selectedFile ? ' active' : ''}`}
-                style={{ paddingLeft: `${8 + depth * 16}px` }}
-                  onClick={() => onSelect(node.path)}
+                className={cn(
+                  'flex items-center gap-1 w-full text-left px-2 py-1.5 text-sm rounded-sm transition-colors',
+                  node.path === selectedFile
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'hover:bg-muted text-muted-foreground'
+                )}
+                style={{ paddingLeft: `${8 + depth * 14}px` }}
+                onClick={() => onSelect(node.path)}
               >
-                  <span className="tree-icon">{getFileIcon(node.name)}</span>
-                {node.name}
+                <span className="w-3 shrink-0" />
+                <span className="text-xs shrink-0">{getFileIcon(node.name)}</span>
+                <span className="truncate">{node.name}</span>
               </button>
             )}
           </li>
@@ -136,14 +137,9 @@ export default function FileSidebar({ files, selectedFile, onSelect }: Props) {
     )
   }
 
-  return (
-    <aside className="file-sidebar">
-      <div className="sidebar-header">Bài học</div>
-      {files.length === 0 ? (
-        <p className="sidebar-empty">Không tìm thấy file .md</p>
-      ) : (
-        renderTree(tree, 0)
-      )}
-    </aside>
-  )
+  if (files.length === 0) {
+    return <p className="px-3 py-4 text-sm text-muted-foreground">Không tìm thấy file .md</p>
+  }
+
+  return renderTree(tree, 0)
 }

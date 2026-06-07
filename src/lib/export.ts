@@ -13,40 +13,44 @@ import {
   LineRuleType,
 } from 'docx'
 
-const DEFAULT_FONT = 'Times New Roman'
-const DEFAULT_SIZE = 26
-const DEFAULT_COLOR = '000000'
-const DEF_SPACING = { before: 120, after: 120, line: 288, lineRule: LineRuleType.AUTO }
+export const DEFAULT_FONT = 'Times New Roman'
+export const DEFAULT_SIZE = 26
+export const DEFAULT_COLOR = '000000'
+export const DEF_SPACING = { before: 120, after: 120, line: 288, lineRule: LineRuleType.AUTO }
 
-function inlineRuns(text: string): TextRun[] {
+export function inlineRuns(text: string, font = DEFAULT_FONT): TextRun[] {
   const runs: TextRun[] = []
-  const regex = /(\*\*|__)(.*?)\1|(\*|_)(.*?)\3|`([^`]+)`|~~(.*?)~~|\[([^\]]+)\]\(([^)]+)\)/g
+  const regex = /\*\*\*(.+?)\*\*\*|(\*\*|__)(.+?)\2|(?<!\w)_(.+?)_(?!\w)|\*(.+?)\*|`([^`]+)`|~~(.*?)~~|\[([^\]]+)\]\(([^)]+)\)/g
   let last = 0
 
   for (const m of text.matchAll(regex)) {
     if (m.index! > last) {
-      runs.push(new TextRun({ text: text.slice(last, m.index), font: DEFAULT_FONT, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+      runs.push(new TextRun({ text: text.slice(last, m.index), font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
     }
-    if (m[2] !== undefined) {
-      runs.push(new TextRun({ text: m[2], bold: true, font: DEFAULT_FONT, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+    if (m[1] !== undefined) {
+      runs.push(new TextRun({ text: m[1], bold: true, italics: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+    } else if (m[3] !== undefined) {
+      runs.push(new TextRun({ text: m[3], bold: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
     } else if (m[4] !== undefined) {
-      runs.push(new TextRun({ text: m[4], italics: true, font: DEFAULT_FONT, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+      runs.push(new TextRun({ text: m[4], italics: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
     } else if (m[5] !== undefined) {
-      runs.push(new TextRun({ text: m[5], font: 'Courier New', size: 18 }))
+      runs.push(new TextRun({ text: m[5], italics: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
     } else if (m[6] !== undefined) {
-      runs.push(new TextRun({ text: m[6], strike: true, font: DEFAULT_FONT, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-    } else if (m[7] !== undefined && m[8] !== undefined) {
-      runs.push(new TextRun({ text: m[7], style: 'Hyperlink' }))
+      runs.push(new TextRun({ text: m[6], font: 'Courier New', size: 18 }))
+    } else if (m[7] !== undefined) {
+      runs.push(new TextRun({ text: m[7], strike: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+    } else if (m[8] !== undefined && m[9] !== undefined) {
+      runs.push(new TextRun({ text: m[8], style: 'Hyperlink' }))
     }
     last = m.index! + m[0].length
   }
   if (last < text.length) {
-    runs.push(new TextRun({ text: text.slice(last), font: DEFAULT_FONT, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+    runs.push(new TextRun({ text: text.slice(last), font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
   }
-  return runs.length ? runs : [new TextRun({ text, font: DEFAULT_FONT, size: DEFAULT_SIZE, color: DEFAULT_COLOR })]
+  return runs.length ? runs : [new TextRun({ text, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR })]
 }
 
-function headingLevel(level: number) {
+export function headingLevel(level: number) {
   const map: Record<number, string> = {
     1: 'Heading1',
     2: 'Heading2',
