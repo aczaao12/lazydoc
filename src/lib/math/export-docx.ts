@@ -1,65 +1,98 @@
 import {
-  Document,
-  Packer,
   Paragraph,
   TextRun,
   Table,
   TableRow,
   TableCell,
-  WidthType,
-  BorderStyle,
+  Document,
+  Packer,
   LevelFormat,
   AlignmentType,
   LineRuleType,
+  WidthType,
+  BorderStyle,
 } from 'docx'
+import type { ParagraphChild } from 'docx'
+import { DEF_SPACING, headingLevel, DEFAULT_FONT, DEFAULT_SIZE, DEFAULT_COLOR } from '../export'
+import type { LaTeXSource } from './types'
+import { latexToMath } from './parser'
+import { preprocessMath } from './preprocess'
 
-export const DEFAULT_FONT = 'Times New Roman'
-export const DEFAULT_SIZE = 26
-export const DEFAULT_COLOR = '000000'
-export const DEF_SPACING = { before: 120, after: 120, line: 288, lineRule: LineRuleType.AUTO }
+export interface ExportMathOptions {
+  font?: string
+  fontSize?: number
+  source?: LaTeXSource
+}
 
-export function inlineRuns(text: string, font = DEFAULT_FONT): TextRun[] {
-  const runs: TextRun[] = []
-  const regex = /\*\*\*(.+?)\*\*\*|(\*\*|__)(.+?)\2|(?<!\w)_(.+?)_(?!\w)|\*(.+?)\*|`([^`]+)`|~~(.*?)~~|\[([^\]]+)\]\(([^)]+)\)/g
+const INLINE_MATH_RE = /\$\$(.+?)\$\$|\\\[(.+?)\\\]|\$(.+?)\$|\\\((.+?)\\\)/gs
+
+function useBracketLatex(source?: LaTeXSource): boolean {
+  return !source || source === 'auto' || source === 'chatgpt' || source === 'deepseek'
+}
+
+function inlineRunsWithMath(text: string, font?: string, source?: LaTeXSource): ParagraphChild[] {
+  const displayFont = font || DEFAULT_FONT
+  const result: ParagraphChild[] = []
+  const useBracket = useBracketLatex(source)
+  const regex = /\*\*\*(.+?)\*\*\*|(\*\*|__)(.+?)\2|(?<!\w)_(.+?)_(?!\w)|\*(.+?)\*|`([^`]+)`|~~(.*?)~~|\[([^\]]+)\]\(([^)]+)\)|\$\$(.+?)\$\$|\\\[(.+?)\\\]|\$(.+?)\$|\\\((.+?)\\\)/gs
   let last = 0
 
   for (const m of text.matchAll(regex)) {
     if (m.index! > last) {
-      runs.push(new TextRun({ text: text.slice(last, m.index), font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+      result.push(new TextRun({ text: text.slice(last, m.index), font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
     }
-    if (m[1] !== undefined) {
-      runs.push(new TextRun({ text: m[1], bold: true, italics: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-    } else if (m[3] !== undefined) {
-      runs.push(new TextRun({ text: m[3], bold: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-    } else if (m[4] !== undefined) {
-      runs.push(new TextRun({ text: m[4], italics: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-    } else if (m[5] !== undefined) {
-      runs.push(new TextRun({ text: m[5], italics: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-    } else if (m[6] !== undefined) {
-      runs.push(new TextRun({ text: m[6], font: 'Courier New', size: 18 }))
-    } else if (m[7] !== undefined) {
-      runs.push(new TextRun({ text: m[7], strike: true, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-    } else if (m[8] !== undefined && m[9] !== undefined) {
-      runs.push(new TextRun({ text: m[8], style: 'Hyperlink' }))
+
+    if (m[10] !== undefined) {
+      result.push(latexToMath(preprocessMath(m[10])))
+    } else if (useBracket && m[11] !== undefined) {
+      result.push(latexToMath(preprocessMath(m[11])))
+    } else if (m[12] !== undefined) {
+      result.push(latexToMath(preprocessMath(m[12])))
+    } else if (useBracket && m[13] !== undefined) {
+      result.push(latexToMath(preprocessMath(m[13])))
+    } else if (m[11] !== undefined || m[13] !== undefined) {
+      result.push(new TextRun({ text: m[0], font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
+    } else {
+      let innerText: string
+      const baseProps: Record<string, any> = { font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR }
+
+      if (m[1] !== undefined) { innerText = m[1]; baseProps.bold = true; baseProps.italics = true }
+      else if (m[3] !== undefined) { innerText = m[3]; baseProps.bold = true }
+      else if (m[4] !== undefined) { innerText = m[4]; baseProps.italics = true }
+      else if (m[5] !== undefined) { innerText = m[5]; baseProps.italics = true }
+      else if (m[6] !== undefined) { innerText = m[6]; baseProps.font = 'Courier New'; baseProps.size = 18 }
+      else if (m[7] !== undefined) { innerText = m[7]; baseProps.strike = true }
+      else {
+        if (m[8] !== undefined && m[9] !== undefined) {
+          result.push(new TextRun({ text: m[8], style: 'Hyperlink' }))
+        }
+        last = m.index! + m[0].length
+        continue
+      }
+
+      const mathRe = useBracket ? INLINE_MATH_RE : /\$\$(.+?)\$\$|\$(.+?)\$/gs
+      let innerLast = 0
+      for (const im of innerText.matchAll(mathRe)) {
+        if (im.index! > innerLast) {
+          result.push(new TextRun({ text: innerText.slice(innerLast, im.index), ...baseProps }))
+        }
+        const raw = im[1] ?? im[2] ?? im[3] ?? im[4]
+        if (raw) result.push(latexToMath(preprocessMath(raw)))
+        innerLast = im.index! + im[0].length
+      }
+      if (innerLast < innerText.length) {
+        result.push(new TextRun({ text: innerText.slice(innerLast), ...baseProps }))
+      }
     }
+
     last = m.index! + m[0].length
   }
-  if (last < text.length) {
-    runs.push(new TextRun({ text: text.slice(last), font, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-  }
-  return runs.length ? runs : [new TextRun({ text, font, size: DEFAULT_SIZE, color: DEFAULT_COLOR })]
-}
 
-export function headingLevel(level: number) {
-  const map: Record<number, string> = {
-    1: 'Heading1',
-    2: 'Heading2',
-    3: 'Heading3',
-    4: 'Heading4',
-    5: 'Heading5',
-    6: 'Heading6',
+  if (last < text.length) {
+    result.push(new TextRun({ text: text.slice(last), font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
   }
-  return map[level] as any
+
+  return result.length ? result : [new TextRun({ text, font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR })]
 }
 
 function parseTableRow(line: string): string[] {
@@ -67,7 +100,7 @@ function parseTableRow(line: string): string[] {
   const parts = trimmed.split('|')
   const startsWithPipe = trimmed.startsWith('|')
   const endsWithPipe = trimmed.endsWith('|')
-  
+
   if (startsWithPipe && endsWithPipe) {
     return parts.slice(1, -1).map(c => c.trim())
   }
@@ -84,30 +117,28 @@ function isTableSeparator(cells: string[]): boolean {
   return cells.every(c => /^:?-+:?$/.test(c))
 }
 
-
-
-function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
+function parseMarkdownWithMath(md: string, font?: string, source?: LaTeXSource): (Paragraph | Table)[] {
   const displayFont = font || DEFAULT_FONT
   const lines = md.split('\n')
   const elements: (Paragraph | Table)[] = []
-  
+
   let i = 0
   const listStack: { type: 'ordered' | 'unordered'; ref: string; indent: number }[] = []
   let listCounter = 0
-  
+
   function nextListRef() {
     listCounter++
     return 'ordered-list-' + listCounter
   }
-  
+
   function clearListStack() {
     listStack.length = 0
   }
-  
+
   while (i < lines.length) {
     const rawLine = lines[i]
     const line = rawLine.trimEnd()
-    
+
     // 1. Code Block
     if (line.trimStart().startsWith('```')) {
       clearListStack()
@@ -120,32 +151,32 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
         i++
       }
       if (i < lines.length) i++ // skip closing marker
-      
+
       if (lang === 'quiz') {
         try {
           const quizJson = codeLines.join('\n').trim()
           const data = JSON.parse(quizJson)
-          
+
           elements.push(new Paragraph({
             children: [new TextRun({ text: `Câu hỏi: ${data.question || data.stem || data.text || ''}`, bold: true, font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR })],
             spacing: { before: 200, after: 120 }
           }))
-          
+
           const options = data.type === 'truefalse' && (!data.options || data.options.length === 0)
             ? ['Đúng', 'Sai']
             : data.options || data.choices || data.answers || []
-            
+
           options.forEach((opt: string, optIdx: number) => {
             const letter = String.fromCharCode(65 + optIdx)
             elements.push(new Paragraph({
               children: [
                 new TextRun({ text: `  ${letter}. `, bold: true, font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR }),
-                ...inlineRuns(opt, displayFont)
+                ...inlineRunsWithMath(opt, displayFont, source)
               ],
               spacing: { after: 60 }
             }))
           })
-          
+
           const answerVal = data.correct !== undefined ? data.correct : (data.answer || data.correctAnswer)
           if (answerVal !== undefined) {
             let correctLetter = ''
@@ -154,13 +185,13 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
             } else {
               correctLetter = String(answerVal)
             }
-            const feedbackRuns: TextRun[] = [
+            const feedbackRuns: ParagraphChild[] = [
               new TextRun({ text: `* Đáp án đúng: ${correctLetter}`, bold: true, font: displayFont, size: DEFAULT_SIZE, color: '2E7D32' })
             ]
             const explanation = data.explain || data.explanation || data.solution || data.reasoning
             if (explanation) {
               feedbackRuns.push(new TextRun({ text: `\n* Giải thích: `, bold: true, font: displayFont, size: DEFAULT_SIZE, color: '555555' }))
-              feedbackRuns.push(...inlineRuns(explanation, displayFont))
+              feedbackRuns.push(...inlineRunsWithMath(explanation, displayFont, source))
             }
             elements.push(new Paragraph({
               children: feedbackRuns,
@@ -223,13 +254,13 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
       }
       continue
     }
-    
+
     // 2. Empty Line
     if (line.trim() === '') {
       i++
       continue
     }
-    
+
     // 3. Blockquote
     if (line.trimStart().startsWith('>')) {
       clearListStack()
@@ -240,9 +271,9 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
         quoteLines.push(m ? m[1] : rawQuote.slice(1))
         i++
       }
-      
-      const innerElements = parseMarkdown(quoteLines.join('\n'), font)
-      
+
+      const innerElements = parseMarkdownWithMath(quoteLines.join('\n'), font, source)
+
       elements.push(
         new Table({
           rows: [
@@ -266,7 +297,7 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
       )
       continue
     }
-    
+
     // 4. Horizontal Rule
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
       clearListStack()
@@ -274,7 +305,7 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
       i++
       continue
     }
-    
+
     // 5. Headings
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
     if (headingMatch) {
@@ -282,29 +313,29 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
       const level = headingMatch[1].length
       const text = headingMatch[2]
       elements.push(new Paragraph({
-        children: inlineRuns(text, displayFont),
+        children: inlineRunsWithMath(text, displayFont, source),
         heading: headingLevel(level),
         spacing: { before: 240, after: 120, line: 288, lineRule: LineRuleType.AUTO },
       }))
       i++
       continue
     }
-    
+
     // 6. Lists
     const ulMatch = line.match(/^(\s*)[-*+]\s+(.+)$/)
     const olMatch = line.match(/^(\s*)(\d+)[.)]\s+(.+)$/)
-    
+
     if (ulMatch || olMatch) {
       const isUl = !!ulMatch
       const indentStr = isUl ? ulMatch![1] : olMatch![1]
       const text = isUl ? ulMatch![2] : olMatch![3]
       const indentVal = indentStr.length
       const type = isUl ? 'unordered' : 'ordered'
-      
+
       while (listStack.length > 0 && indentVal < listStack[listStack.length - 1].indent) {
         listStack.pop()
       }
-      
+
       let currentList = listStack[listStack.length - 1]
       if (!currentList || indentVal > currentList.indent) {
         const ref = isUl ? 'bullet' : nextListRef()
@@ -316,38 +347,38 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
         currentList = { type, ref, indent: indentVal }
         listStack.push(currentList)
       }
-      
+
       const level = listStack.length - 1
       const pOpts: any = {
-        children: inlineRuns(text, displayFont),
+        children: inlineRunsWithMath(text, displayFont, source),
         spacing: { after: 120, line: 288, lineRule: LineRuleType.AUTO }
       }
-      
+
       if (currentList.type === 'unordered') {
         pOpts.bullet = { level }
       } else {
         pOpts.numbering = { reference: currentList.ref, level }
       }
-      
+
       elements.push(new Paragraph(pOpts))
       i++
       continue
     }
-    
+
     // 7. Table
     const hasPipe = line.includes('|')
     const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : ''
     const isNextTableSep = nextLine.startsWith('|') && isTableSeparator(parseTableRow(nextLine))
-    
+
     if (hasPipe && (line.trim().startsWith('|') || isNextTableSep)) {
       clearListStack()
       const tableRows: string[][] = []
       let alignments: any[] = []
-      
+
       const headerCells = parseTableRow(line)
       tableRows.push(headerCells)
       i++
-      
+
       if (i < lines.length) {
         const sepLine = lines[i].trim()
         if (sepLine.includes('|')) {
@@ -365,17 +396,17 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
           }
         }
       }
-      
+
       while (i < lines.length) {
         const bodyLine = lines[i].trimEnd()
         if (!bodyLine.includes('|')) break
         tableRows.push(parseTableRow(bodyLine))
         i++
       }
-      
+
       if (tableRows.length >= 1) {
         const columns = tableRows[0].length
-        
+
         const headerRow = new TableRow({
           tableHeader: true,
           children: tableRows[0].map((c, colIdx) => {
@@ -383,7 +414,7 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
             return new TableCell({
               children: [
                 new Paragraph({
-                  children: inlineRuns(c, displayFont),
+                  children: inlineRunsWithMath(c, displayFont, source),
                   alignment: align,
                   spacing: { line: 288, lineRule: LineRuleType.AUTO }
                 })
@@ -392,7 +423,7 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
             })
           })
         })
-        
+
         const rows = tableRows.slice(1).map(cells =>
           new TableRow({
             children: Array.from({ length: columns }).map((_, colIdx) => {
@@ -401,7 +432,7 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
               return new TableCell({
                 children: [
                   new Paragraph({
-                    children: inlineRuns(c, displayFont),
+                    children: inlineRunsWithMath(c, displayFont, source),
                     alignment: align,
                     spacing: { line: 288, lineRule: LineRuleType.AUTO }
                   })
@@ -410,7 +441,7 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
             })
           })
         )
-        
+
         elements.push(
           new Table({
             rows: [headerRow, ...rows],
@@ -428,16 +459,16 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
         continue
       }
     }
-    
+
     // 8. Normal Paragraph
     clearListStack()
-    const paraRuns: TextRun[] = []
-    paraRuns.push(...inlineRuns(line, displayFont))
+    const paraRuns: ParagraphChild[] = []
+    paraRuns.push(...inlineRunsWithMath(line, displayFont, source))
     i++
     while (i < lines.length) {
       const nextLineRaw = lines[i]
       const nextLineTrim = nextLineRaw.trim()
-      
+
       if (nextLineTrim === '') break
       if (/^(#{1,6}\s+|```|---|\*{3,}|_{3,}|>)/.test(nextLineTrim)) break
       if (nextLineTrim.match(/^[-*+]\s+/) || nextLineTrim.match(/^\d+[.)]\s+/)) break
@@ -445,27 +476,28 @@ function parseMarkdown(md: string, font?: string): (Paragraph | Table)[] {
         const nextLineSep = i + 1 < lines.length ? lines[i + 1].trim() : ''
         if (nextLineRaw.trimStart().startsWith('|') || (nextLineSep.startsWith('|') && isTableSeparator(parseTableRow(nextLineSep)))) break
       }
-      
+
       paraRuns.push(new TextRun({ text: ' ', font: displayFont, size: DEFAULT_SIZE, color: DEFAULT_COLOR }))
-      paraRuns.push(...inlineRuns(nextLineRaw.trimEnd(), displayFont))
+      paraRuns.push(...inlineRunsWithMath(nextLineRaw.trimEnd(), displayFont, source))
       i++
     }
-    
+
     elements.push(new Paragraph({ children: paraRuns, spacing: DEF_SPACING }))
   }
-  
+
   return elements
 }
 
-
-
-export async function exportWord(content: string, title: string): Promise<void> {
-  const children = parseMarkdown(content)
+export async function exportWordWithMath(content: string, title: string, options?: ExportMathOptions): Promise<void> {
+  const font = options?.font
+  const source = options?.source
+  const children = parseMarkdownWithMath(content, font, source)
 
   if (children.length === 0) {
     children.push(new Paragraph({ children: [new TextRun('')] }))
   }
 
+  // Collect unique ordered list references used
   const usedRefs = new Set<string>()
   children.forEach(c => {
     if (c instanceof Paragraph) {
@@ -489,12 +521,7 @@ export async function exportWord(content: string, title: string): Promise<void> 
   const doc = new Document({
     title,
     numbering: { config: numberingConfig },
-    sections: [
-      {
-        properties: {},
-        children,
-      },
-    ],
+    sections: [{ properties: {}, children }],
   })
 
   const blob = await Packer.toBlob(doc)
@@ -504,8 +531,4 @@ export async function exportWord(content: string, title: string): Promise<void> 
   a.download = `${title.replace(/\.md$/i, '')}.docx`
   a.click()
   URL.revokeObjectURL(url)
-}
-
-export function exportPdf(): void {
-  window.print()
 }

@@ -6,7 +6,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowLeft, FileDown, Upload, Trash2, Eye, Code2, Clipboard } from 'lucide-react'
-import { exportWordWithMath, hasLatex, copyToWordHtml } from '@/lib/export-math'
+import { exportWordWithMath, hasLatex, copyToWordHtml, LATEX_SOURCES, preprocessMarkdownForMath } from '@/lib/export-math'
+import type { LaTeXSource } from '@/lib/export-math'
+import katex from 'katex'
 
 const FONT_OPTIONS = [
   'Times New Roman',
@@ -24,6 +26,7 @@ export default function ConvertPage() {
   const [processing, setProcessing] = useState(false)
   const [font, setFont] = useState(FONT_OPTIONS[0])
   const [enableLatex, setEnableLatex] = useState(true)
+  const [latexSource, setLatexSource] = useState<LaTeXSource>('auto')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback(async (file: File) => {
@@ -55,19 +58,19 @@ export default function ConvertPage() {
     setProcessing(true)
     try {
       const title = fileName || 'ai-to-word'
-      await exportWordWithMath(content, title, { font })
+      await exportWordWithMath(content, title, { font, source: latexSource })
     } catch (err) {
       alert(`Lỗi khi xuất Word: ${err instanceof Error ? err.message : 'Lỗi không xác định'}`)
     }
     setProcessing(false)
-  }, [content, fileName, font])
+  }, [content, fileName, font, latexSource])
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
 
   const handleCopyToWord = useCallback(async () => {
     if (!content.trim()) return
     try {
-      const html = copyToWordHtml(content, font, enableLatex)
+      const html = copyToWordHtml(content, font, enableLatex, latexSource)
       const htmlBlob = new Blob([html], { type: 'text/html' })
       const plainBlob = new Blob([content], { type: 'text/plain' })
       await navigator.clipboard.write([
@@ -78,14 +81,14 @@ export default function ConvertPage() {
       setCopyMsg('Copy thất bại')
     }
     setTimeout(() => setCopyMsg(null), 2500)
-  }, [content, font, enableLatex])
+  }, [content, font, enableLatex, latexSource])
 
   const clearAll = useCallback(() => {
     setContent('')
     setFileName(null)
   }, [])
 
-  const hasFormula = enableLatex && hasLatex(content)
+  const hasFormula = enableLatex && hasLatex(content, latexSource)
   const lineCount = content.split('\n').length
 
   return (
@@ -153,7 +156,9 @@ Nghiệm: $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
 
 Hoá học: $H_2O$, $CO_2$, $CH_4$
 
-Vật lý: $E = mc^2$, $F = G\\frac{m_1 m_2}{r^2}$`}
+Vật lý: $E = mc^2$, $F = G\\frac{m_1 m_2}{r^2}$
+
+ChatGPT hay dùng: $\\{I_i\\}$ hoặc $\\[E = mc^2\\]$`}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               spellCheck={false}
@@ -175,8 +180,34 @@ Vật lý: $E = mc^2$, $F = G\\frac{m_1 m_2}{r^2}$`}
               <ScrollArea className="flex-1">
                 {content ? (
                   <div className="p-6 max-w-3xl mx-auto prose prose-sm dark:prose-invert">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {content}
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ className, children, ...props }) {
+                          const text = String(children);
+                          if (text.startsWith('math-inline:')) {
+                            const latex = text.slice(12);
+                            try {
+                              const html = katex.renderToString(latex, { displayMode: false, throwOnError: false });
+                              return <span dangerouslySetInnerHTML={{ __html: html }} />;
+                            } catch {
+                              return <code {...props}>{latex}</code>;
+                            }
+                          }
+                          if (className === 'language-math-display') {
+                            const latex = text.trim();
+                            try {
+                              const html = katex.renderToString(latex, { displayMode: true, throwOnError: false });
+                              return <div className="my-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />;
+                            } catch {
+                              return <pre className="my-4 overflow-x-auto"><code>{latex}</code></pre>;
+                            }
+                          }
+                          return <code className={className} {...props}>{children}</code>;
+                        }
+                      }}
+                    >
+                      {preprocessMarkdownForMath(content)}
                     </ReactMarkdown>
                   </div>
                 ) : (
@@ -203,12 +234,27 @@ Vật lý: $E = mc^2$, $F = G\\frac{m_1 m_2}{r^2}$`}
                 onChange={(e) => setEnableLatex(e.target.checked)}
                 className="rounded"
               />
-              Xử lý công thức LaTeX ($...$, $$...$$)
+              Xử lý LaTeX
               {hasFormula && (
                 <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 px-1.5 py-0.5 rounded">
-                  Phát hiện công thức
+                  Phát hiện
                 </span>
               )}
+            </label>
+
+            <Separator orientation="vertical" className="h-5 hidden sm:block" />
+
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Nguồn AI:</span>
+              <select
+                value={latexSource}
+                onChange={(e) => setLatexSource(e.target.value as LaTeXSource)}
+                className="text-sm border rounded px-2 py-1 bg-background"
+              >
+                {LATEX_SOURCES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
             </label>
 
             <Separator orientation="vertical" className="h-5 hidden sm:block" />

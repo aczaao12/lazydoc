@@ -3,6 +3,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import QuizBlock from './QuizBlock'
 import type { QuizData } from '../types'
+import { preprocessMarkdownForMath } from '../lib/export-math'
+import katex from 'katex'
 
 interface CodeProps {
   className?: string
@@ -68,9 +70,28 @@ const MarkdownViewer = memo(function MarkdownViewer({ content, mdPath = '', reso
             )
           },
           code({ className, children, ...props }: CodeProps) {
+            const text = String(children);
+            if (text.startsWith('math-inline:')) {
+              const latex = text.slice(12);
+              try {
+                const html = katex.renderToString(latex, { displayMode: false, throwOnError: false });
+                return <span dangerouslySetInnerHTML={{ __html: html }} />;
+              } catch {
+                return <code {...props}>{latex}</code>;
+              }
+            }
+            if (className === 'language-math-display') {
+              const latex = text.trim();
+              try {
+                const html = katex.renderToString(latex, { displayMode: true, throwOnError: false });
+                return <div className="my-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />;
+              } catch {
+                return <pre className="my-4 overflow-x-auto"><code>{latex}</code></pre>;
+              }
+            }
             if (className === 'language-quiz') {
               try {
-                const data: QuizData = JSON.parse(String(children).trim())
+                const data: QuizData = JSON.parse(text.trim())
                 return <QuizBlock data={data} />
               } catch {
                 return <p className="text-destructive bg-destructive/10 rounded p-3">Lỗi định dạng quiz JSON</p>
@@ -80,7 +101,7 @@ const MarkdownViewer = memo(function MarkdownViewer({ content, mdPath = '', reso
           },
         }}
       >
-        {content}
+        {preprocessMarkdownForMath(content)}
       </ReactMarkdown>
     </div>
   )
